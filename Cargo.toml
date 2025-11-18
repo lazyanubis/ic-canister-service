@@ -32,7 +32,7 @@ codegen-units = 1 # 指定一个包会被分隔为多少个代码生成单元。
 [dependencies]
 # Candid 是一种接口描述语言 (IDL)，用于与运行在 Internet 计算机上的容器（也称为服务或参与者）进行交互。
 # Candid crate 是 Candid 的序列化/反序列化库。您可以在 Rust 值和 Candid 之间以二进制和文本格式无缝转换。
-candid = "0.10.19"
+candid = "0.10.20"
 # IC Canister开发工具包
 ic-cdk = "0.18.7"
 # ic-certified-map = "0.4.0" # 可信验证
