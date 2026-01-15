@@ -272,7 +272,7 @@ impl Schedulable for State {
 }
 
 #[allow(unused)]
-fn static_schedule_task() {
+async fn static_schedule_task() {
     if with_state(|s| s.pause_is_paused()) {
         return; // 维护中不允许执行任务
     }
