@@ -4,3 +4,5 @@ target/
 source_opt.wasm
 source_opt_*.wasm.gz
 source_opt.wasm.gz
+AGENTS.md
+.codex

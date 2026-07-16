@@ -18,7 +18,7 @@ pub fn wallet_receive() -> candid::Nat {
             RecordTopics::CyclesCharge.topic(),
             format!("{} recharge {} cycles", caller.to_text(), accepted),
         );
-        with_record_update_done(record_id);
+        with_record_update(record_id, String::new());
     })
 }
 
@@ -65,12 +65,22 @@ fn pause_replace(reason: Option<String>) {
         return; // 未改变内容
     }
 
+    if reason.is_some() {
+        ic_canister_kit::common::trap(schedule_task_must_be_idle());
+    }
+
     let caller = caller();
+    let pausing = reason.is_some();
     let arg_content = format!("{} -> {}", display_option(&old), display_option(&reason)); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
+        |s, _result| {
             s.pause_replace(reason.map(PauseReason::new));
+            if pausing {
+                s.schedule_stop();
+            } else {
+                s.schedule_reload();
+            }
         },
         caller,
         RecordTopics::Pause.topic(),
@@ -126,7 +136,7 @@ fn permission_assigned_by_user(user_id: UserId) -> Option<HashSet<Permission>> {
 }
 
 // 所有角色
-#[ic_cdk::query(guard = "has_permission_query")]
+#[ic_cdk::query(guard = "has_permission_find")]
 fn permission_roles_all() -> HashMap<String, HashSet<Permission>> {
     with_state(|s| {
         s.permission_roles()
@@ -163,7 +173,7 @@ fn permission_update(args: Vec<PermissionUpdatedArg<String>>) {
     ); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
+        |s, _result| {
             use ic_canister_kit::common::trap;
             let args = args
                 .into_iter()
@@ -180,6 +190,9 @@ fn permission_update(args: Vec<PermissionUpdatedArg<String>>) {
 
 // ================== 记录接口 ==================
 
+/// 单次记录查询或删除的最大数量
+const MAX_RECORD_BATCH_SIZE: usize = 1000;
+
 // 查询所有主题
 #[ic_cdk::query(guard = "has_record_find")]
 fn record_topics() -> Vec<String> {
@@ -194,31 +207,27 @@ fn record_find_by_page(page: QueryPage, search: Option<RecordSearchArg>) -> Page
         .map(|s| s.into(|t| RecordTopics::from(t).map(|t| t.topic())))
         .transpose();
     let search = trap(search);
-    let result = with_state(|s| s.record_find_by_page(&page, 1000, &search).map(|p| p.into()));
+    let result = with_state(|s| {
+        s.record_find_by_page(&page, MAX_RECORD_BATCH_SIZE as u32, &search)
+            .map(|p| p.into())
+    });
     trap(result)
 }
 
-// 移动
-#[ic_cdk::update(guard = "has_record_migrate")]
-fn record_migrate(max: u32) -> MigratedRecords<Record> {
-    let caller = caller();
-    let arg_content = format!("wanna migrate {max} records"); // * 记录参数内容
+// 按 id 批量删除；调用方应先通过 record_find_by_page 查询并完成外部归档
+#[ic_cdk::update(guard = "has_record_delete")]
+fn record_delete(ids: Vec<u64>) -> u64 {
+    if ids.len() > MAX_RECORD_BATCH_SIZE {
+        ic_cdk::trap(format!("Record delete size must not exceed {MAX_RECORD_BATCH_SIZE}."));
+    }
 
-    with_mut_state(
-        |s, done| {
-            let result = s.record_migrate(max);
-            *done = Some(format!(
-                "removed: {} total: {} record size: {} ",
-                result.removed,
-                result.next_id,
-                result.records.len(),
-            ));
-            result
-        },
-        caller,
-        RecordTopics::Record.topic(),
-        arg_content,
-    )
+    let ids = ids.into_iter().map(RecordId::from).collect::<HashSet<_>>();
+    if ids.is_empty() {
+        return 0;
+    }
+
+    // 删除日志本身不能再追加日志，否则外部归档永远无法清空记录。
+    with_mut_state_without_record(|s| s.record_delete(&ids))
 }
 
 // ================== 定时任务 ==================
@@ -226,21 +235,35 @@ fn record_migrate(max: u32) -> MigratedRecords<Record> {
 // 查询定时状态
 #[ic_cdk::query(guard = "has_schedule_find")]
 fn schedule_find() -> Option<u64> {
-    with_state(|s| s.schedule_find().map(|s| s.into_inner() as u64))
+    let schedule = with_state(|s| {
+        s.schedule_find()
+            .map(|schedule| {
+                u64::try_from(schedule.into_inner())
+                    .map_err(|_| "Stored schedule interval exceeds the u64 nanosecond range.")
+            })
+            .transpose()
+    });
+    ic_canister_kit::common::trap(schedule)
 }
 
 // 设置定时状态
 #[ic_cdk::update(guard = "has_schedule_replace")]
 fn schedule_replace(schedule: Option<u64>) {
+    let schedule = schedule.map(|schedule| (schedule as u128).into());
+    let schedule = ic_canister_kit::common::trap(validate_schedule(schedule));
     let old = with_state(|s| s.schedule_find());
 
     let caller = caller();
     let arg_content = format!("{} -> {}", display_option(&old), display_option(&schedule)); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
-            s.schedule_replace(schedule.map(|s| (s as u128).into()));
-            s.schedule_reload(); // * 重置定时任务
+        |s, _result| {
+            s.schedule_replace(schedule);
+            if s.pause_is_paused() {
+                s.schedule_stop();
+            } else {
+                s.schedule_reload(); // * 重置定时任务
+            }
         },
         caller,
         RecordTopics::Schedule.topic(),
@@ -252,8 +275,5 @@ fn schedule_replace(schedule: Option<u64>) {
 #[ic_cdk::update(guard = "has_schedule_trigger")]
 async fn schedule_trigger() {
     let caller = caller();
-
-    assert!(with_mut_state_without_record(|s| { s.pause_must_be_running() }).is_ok()); // 维护中不允许执行任务
-
-    schedule_task(Some(caller)).await;
+    ic_canister_kit::common::trap(run_schedule_task(Some(caller)).await)
 }

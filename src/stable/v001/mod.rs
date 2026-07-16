@@ -18,7 +18,8 @@ use types::*;
 // ! 第一次部署会执行
 impl Initial<Option<InitArg>> for InnerState {
     fn init(&mut self, arg: Option<InitArg>) {
-        let arg = arg.unwrap_or_default(); // ! 就算是 None，也要执行一次
+        let mut arg = arg.unwrap_or_default(); // ! 就算是 None，也要执行一次
+        arg.schedule = ic_canister_kit::common::trap(super::validate_schedule(arg.schedule));
 
         // 超级管理员初始化
         let supers = arg.supers.clone().unwrap_or_else(|| {
@@ -45,10 +46,11 @@ impl Initial<Option<InitArg>> for InnerState {
 // ! 升级时执行
 impl Upgrade<Option<UpgradeArg>> for InnerState {
     fn upgrade(&mut self, arg: Option<UpgradeArg>) {
-        let arg = match arg {
+        let mut arg = match arg {
             Some(arg) => arg,
             None => return, // ! None 表示升级无需处理数据
         };
+        arg.schedule = ic_canister_kit::common::trap(super::validate_schedule(arg.schedule));
 
         // 超级管理员初始化
         let supers = arg.supers.clone();
@@ -127,12 +129,12 @@ impl Recordable<Record, RecordTopic, RecordSearch> for InnerState {
     fn record_push(&mut self, caller: CallerId, topic: RecordTopic, content: String) -> RecordId {
         self.canister_kit.records.record_push(caller, topic, content)
     }
-    fn record_update(&mut self, record_id: RecordId, done: String) {
-        self.canister_kit.records.record_update(record_id, done)
+    fn record_update(&mut self, record_id: RecordId, result: String) {
+        self.canister_kit.records.record_update(record_id, result)
     }
-    // 迁移
-    fn record_migrate(&mut self, max: u32) -> MigratedRecords<Record> {
-        self.canister_kit.records.record_migrate(max)
+    // 删除
+    fn record_delete(&mut self, ids: &HashSet<RecordId>) -> u64 {
+        self.canister_kit.records.record_delete(ids)
     }
 }
 

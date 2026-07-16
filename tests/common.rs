@@ -34,7 +34,7 @@ fn test_common_apis() {
     #[allow(unused)] let anonymous = pocketed_canister_id.sender(anonymous_identity);
 
     let public_permissions = ["PauseQuery", "PermissionQuery", "BusinessExampleQuery"].iter().map(|p| p.to_string()).collect::<Vec<_>>();
-    let super_permissions = ["PauseQuery", "PauseReplace", "PermissionQuery", "PermissionFind", "PermissionUpdate", "RecordFind", "RecordMigrate", "ScheduleFind", "ScheduleReplace", "ScheduleTrigger", "BusinessExampleQuery", "BusinessExampleSet"].iter().map(|p| p.to_string()).collect::<Vec<_>>();
+    let super_permissions = ["PauseQuery", "PauseReplace", "PermissionQuery", "PermissionFind", "PermissionUpdate", "RecordFind", "RecordDelete", "ScheduleFind", "ScheduleReplace", "ScheduleTrigger", "BusinessExampleQuery", "BusinessExampleSet"].iter().map(|p| p.to_string()).collect::<Vec<_>>();
     let all_permissions = super_permissions.iter().map(|p| if public_permissions.contains(p) { Forbidden(p.clone()) } else { Permitted(p.clone()) }).collect::<Vec<_>>();
 
     // 🚩 1.1 permission permission_query
@@ -58,10 +58,12 @@ fn test_common_apis() {
     assert_eq!(default.permission_find_by_user(alice_identity).unwrap(), public_permissions);
     assert_eq!(alice.permission_find_by_user(default_identity).unwrap_err().reject_message, "Permission 'PermissionFind' is required".to_string());
     assert_eq!(alice.permission_find_by_user(alice_identity).unwrap_err().reject_message, "Permission 'PermissionFind' is required".to_string());
+    assert_eq!(alice.permission_roles_all().unwrap_err().reject_message, "Permission 'PermissionFind' is required".to_string());
 
     // 🚩 1.3 permission roles
     assert_eq!(alice.permission_query().unwrap(), public_permissions);
     assert_eq!(default.permission_update(vec![PermissionUpdatedArg::UpdateRolePermission("Admin".to_string(), Some(vec!["PauseReplace".to_string(), "PauseQuery".to_string()]))]).unwrap(), ());
+    assert!(default.permission_roles_all().unwrap().iter().any(|(role, _)| role == "Admin"));
     assert_eq!(default.permission_update(vec![PermissionUpdatedArg::UpdateUserRole(alice_identity, Some(vec!["Admin".to_string()]))]).unwrap(), ());
     assert_eq!(alice.permission_query().unwrap(), ["PauseReplace", "PermissionQuery", "BusinessExampleQuery"].iter().map(|p| p.to_string()).collect::<Vec<_>>());
     assert_eq!(default.permission_update(vec![PermissionUpdatedArg::UpdateUserRole(alice_identity, None)]).unwrap(), ());
@@ -90,24 +92,42 @@ fn test_common_apis() {
     // 🚩 3 record no permission
     assert_eq!(alice.record_topics().unwrap_err().reject_message, "Permission 'RecordFind' is required".to_string());
     assert_eq!(default.record_topics().unwrap(), ["Example", "ExampleCell", "ExampleVec", "ExampleMap", "ExampleLog", "ExamplePriorityQueue", "CyclesCharge", "Upgrade", "Schedule", "Record", "Permission", "Pause", "Initial"].iter().map(|t| t.to_string()).collect::<Vec<_>>());
-    let mut page_data = default.record_find_by_page(QueryPage { page: 1, size: 1 }, Some(RecordSearchArg{ id: None, created: None, topic: Some(vec!["Pause".to_string()]), content: None, caller: None })).unwrap();
+    let mut page_data = default.record_find_by_page(QueryPage { page: 1, size: 1 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Pause".to_string()]), content: None, caller: None })).unwrap();
     assert_eq!(page_data.total, 2);
     assert_eq!(page_data.page, 1);
     assert_eq!(page_data.size, 1);
     assert_eq!(page_data.data.len(), 1);
-    assert!(page_data.data.pop().unwrap().content.contains(r#"message: "reason" } -> None"#));
-    assert_eq!(default.record_migrate(1).unwrap().removed, 0);
-    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id: None, created: None, topic: Some(vec!["Record".to_string()]), content: Some("wanna migrate".to_string()), caller: None })).unwrap();
-    assert_eq!(page_data.total, 1);
+    let record_id = page_data.data.pop().unwrap().id;
+    let record_operation_count_before = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Record".to_string()]), content: None, caller: None })).unwrap().total;
+    assert_eq!(alice.record_delete(vec![record_id]).unwrap_err().reject_message, "Permission 'RecordDelete' is required".to_string());
+    assert_eq!(default.record_delete(Vec::new()).unwrap(), 0);
+    assert!(default.record_delete(vec![u64::MAX; 1001]).unwrap_err().reject_message.contains("Record delete size must not exceed 1000."));
+    assert_eq!(default.record_delete(vec![record_id, record_id, u64::MAX]).unwrap(), 1);
+    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: Some((Some(record_id), Some(record_id))), created_at_nanos_range: None, topic: None, content: None, caller: None })).unwrap();
+    assert_eq!(page_data.total, 0);
+    assert_eq!(default.record_delete(vec![record_id, u64::MAX]).unwrap(), 0);
+    let record_operation_count_after = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Record".to_string()]), content: None, caller: None })).unwrap().total;
+    assert_eq!(record_operation_count_after, record_operation_count_before);
 
     // 🚩 4 schedule
     assert_eq!(alice.schedule_find().unwrap_err().reject_message, "Permission 'ScheduleFind' is required".to_string());
     assert_eq!(default.schedule_find().unwrap(), None);
     assert_eq!(alice.schedule_replace(Some(1000000000)).unwrap_err().reject_message, "Permission 'ScheduleReplace' is required".to_string());
+    assert!(default.schedule_replace(Some(0)).unwrap_err().reject_message.contains("Schedule interval must be at least 1000000000 nanoseconds."));
     assert_eq!(default.schedule_replace(Some(1000000000)).unwrap(), ());
     std::thread::sleep(std::time::Duration::from_secs(3)); // 🕰︎
-    assert_eq!(default.schedule_replace(None).unwrap(), ());
+    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 1000 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Schedule".to_string()]), content: None, caller: None })).unwrap();
+    let scheduled_tasks_before_pause = page_data.data.iter().filter(|record| record.content.is_empty()).count();
+    assert_eq!(default.pause_replace(Some("schedule maintenance".to_string())).unwrap(), ());
+    assert_eq!(default.schedule_find().unwrap(), Some(1000000000));
     std::thread::sleep(std::time::Duration::from_secs(2)); // 🕰︎
+    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 1000 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Schedule".to_string()]), content: None, caller: None })).unwrap();
+    let scheduled_tasks_during_pause = page_data.data.iter().filter(|record| record.content.is_empty()).count();
+    assert_eq!(scheduled_tasks_during_pause, scheduled_tasks_before_pause);
+    assert!(default.schedule_trigger().unwrap_err().reject_message.contains("Canister is paused: schedule maintenance"));
+    assert_eq!(default.schedule_replace(None).unwrap(), ());
+    assert_eq!(default.schedule_find().unwrap(), None);
+    assert_eq!(default.pause_replace(None).unwrap(), ());
     assert_eq!(alice.schedule_trigger().unwrap_err().reject_message, "Permission 'ScheduleTrigger' is required".to_string());
     assert_eq!(default.schedule_trigger().unwrap(), ());
 }

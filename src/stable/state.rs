@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use ic_canister_kit::identity::caller;
 use ic_canister_kit::types::*;
 
-use super::{InitArgs, RecordTopics, ScheduleTask, UpgradeArgs};
+use super::{InitArgs, RecordTopics, ScheduleTask, UpgradeArgs, schedule_task_must_be_idle, validate_schedule};
 use super::{State, State::*};
 
 // 默认值
@@ -56,6 +56,11 @@ fn post_upgrade(args: Option<UpgradeArgs>) {
         *state.borrow_mut() = last_state;
 
         state.borrow_mut().upgrade(args); // ! 恢复后要进行升级到最新版本
+
+        // 无论本次是否传入升级参数，都要校验恢复出的定时任务配置。
+        let schedule = state.borrow().schedule_find();
+        let schedule = ic_canister_kit::common::trap(validate_schedule(schedule));
+        state.borrow_mut().schedule_replace(schedule);
         state.borrow_mut().schedule_reload(); // * 重置定时任务
 
         let version = state.borrow().version(); // 先不可变借用取出版本号
@@ -73,6 +78,7 @@ fn pre_upgrade() {
     STATE.with(|state| {
         use ic_canister_kit::common::trap;
         trap(state.borrow().pause_must_be_paused()); // ! 必须是维护状态, 才可以升级
+        trap(schedule_task_must_be_idle()); // ! 运行中的定时任务必须先完成
         state.borrow_mut().schedule_stop(); // * 停止定时任务
 
         let record_id = state.borrow_mut().record_push(
@@ -129,16 +135,16 @@ where
     STATE.with(|state| {
         let mut state = state.borrow_mut(); // 取得可变对象
         let record_id = state.record_push(caller, topic, content);
-        let mut done = None;
-        let result = callback(&mut state, &mut done);
+        let mut record_result = None;
+        let output = callback(&mut state, &mut record_result);
         state.record_update(
             record_id,
-            done.unwrap_or_else(|| match serde_json::to_string(&result) {
+            record_result.unwrap_or_else(|| match serde_json::to_string(&output) {
                 Ok(s) => s,
                 Err(e) => format!("Serialize failed: {e}"),
             }),
         );
-        result
+        output
     })
 }
 
@@ -153,17 +159,9 @@ pub fn with_record_push(topic: RecordTopic, content: String) -> RecordId {
 }
 /// 更新记录
 #[allow(unused)]
-pub fn with_record_update(record_id: RecordId, done: String) {
+pub fn with_record_update(record_id: RecordId, result: String) {
     STATE.with(|state| {
         let mut state = state.borrow_mut(); // 取得可变对象
-        state.record_update(record_id, done)
-    })
-}
-/// 更新记录
-#[allow(unused)]
-pub fn with_record_update_done(record_id: RecordId) {
-    STATE.with(|state| {
-        let mut state = state.borrow_mut(); // 取得可变对象
-        state.record_update(record_id, String::new())
+        state.record_update(record_id, result)
     })
 }

@@ -23,7 +23,7 @@ fn business_example_set(test: String) {
     let arg_content = format!("set test: {test}"); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
+        |s, _result| {
             s.business_example_update(test);
         },
         caller,
@@ -47,7 +47,7 @@ fn business_example_count_set(value: u64) {
     let arg_content = format!("set value: {value}"); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
+        |s, _result| {
             s.business_example_count_update(value);
         },
         caller,
@@ -65,7 +65,7 @@ fn business_example_count_set_panic_in_state(value: u64) {
     let arg_content = format!("set value: {value}"); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
+        |s, _result| {
             s.business_example_count_update(value);
 
             ic_cdk::trap("panic in state");
@@ -85,7 +85,7 @@ fn business_example_count_set_panic_after_state(value: u64) {
     let arg_content = format!("set value: {value}"); // * 记录参数内容
 
     with_mut_state(
-        |s, _done| {
+        |s, _result| {
             s.business_example_count_update(value);
         },
         caller,
