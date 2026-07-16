@@ -61,7 +61,11 @@ fn post_upgrade(args: Option<UpgradeArgs>) {
         let schedule = state.borrow().schedule_find();
         let schedule = ic_canister_kit::common::trap(validate_schedule(schedule));
         state.borrow_mut().schedule_replace(schedule);
-        state.borrow_mut().schedule_reload(); // * 重置定时任务
+        if state.borrow().pause_is_paused() {
+            state.borrow().schedule_stop();
+        } else {
+            state.borrow_mut().schedule_reload(); // * 重置定时任务
+        }
 
         let version = state.borrow().version(); // 先不可变借用取出版本号
         state
