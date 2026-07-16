@@ -34,7 +34,7 @@ fn test_common_apis() {
     #[allow(unused)] let anonymous = pocketed_canister_id.sender(anonymous_identity);
 
     let public_permissions = ["PauseQuery", "PermissionQuery", "BusinessExampleQuery"].iter().map(|p| p.to_string()).collect::<Vec<_>>();
-    let super_permissions = ["PauseQuery", "PauseReplace", "PermissionQuery", "PermissionFind", "PermissionUpdate", "RecordFind", "RecordMigrate", "ScheduleFind", "ScheduleReplace", "ScheduleTrigger", "BusinessExampleQuery", "BusinessExampleSet"].iter().map(|p| p.to_string()).collect::<Vec<_>>();
+    let super_permissions = ["PauseQuery", "PauseReplace", "PermissionQuery", "PermissionFind", "PermissionUpdate", "RecordFind", "RecordDelete", "ScheduleFind", "ScheduleReplace", "ScheduleTrigger", "BusinessExampleQuery", "BusinessExampleSet"].iter().map(|p| p.to_string()).collect::<Vec<_>>();
     let all_permissions = super_permissions.iter().map(|p| if public_permissions.contains(p) { Forbidden(p.clone()) } else { Permitted(p.clone()) }).collect::<Vec<_>>();
 
     // 🚩 1.1 permission permission_query
@@ -97,16 +97,17 @@ fn test_common_apis() {
     assert_eq!(page_data.page, 1);
     assert_eq!(page_data.size, 1);
     assert_eq!(page_data.data.len(), 1);
-    assert!(page_data.data.pop().unwrap().content.contains(r#"message: "reason" } -> None"#));
-    assert!(default.record_migrate(0).unwrap_err().reject_message.contains("Record migration max must be greater than 0."));
-    assert_eq!(default.record_migrate(1).unwrap().retention_evicted_count, 0);
-    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Record".to_string()]), content: Some("wanna migrate".to_string()), caller: None })).unwrap();
-    assert_eq!(page_data.total, 1);
-    let migrated = default.record_migrate(u32::MAX).unwrap();
-    assert!(!migrated.records.iter().any(|record| record.content == format!("wanna migrate {} records", u32::MAX)));
-    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Record".to_string()]), content: Some(format!("wanna migrate {} records", u32::MAX)), caller: None })).unwrap();
-    assert_eq!(page_data.total, 1);
-    assert!(page_data.data[0].completion.is_some());
+    let record_id = page_data.data.pop().unwrap().id;
+    let record_operation_count_before = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Record".to_string()]), content: None, caller: None })).unwrap().total;
+    assert_eq!(alice.record_delete(vec![record_id]).unwrap_err().reject_message, "Permission 'RecordDelete' is required".to_string());
+    assert_eq!(default.record_delete(Vec::new()).unwrap(), 0);
+    assert!(default.record_delete(vec![u64::MAX; 1001]).unwrap_err().reject_message.contains("Record delete size must not exceed 1000."));
+    assert_eq!(default.record_delete(vec![record_id, record_id, u64::MAX]).unwrap(), 1);
+    let page_data = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: Some((Some(record_id), Some(record_id))), created_at_nanos_range: None, topic: None, content: None, caller: None })).unwrap();
+    assert_eq!(page_data.total, 0);
+    assert_eq!(default.record_delete(vec![record_id, u64::MAX]).unwrap(), 0);
+    let record_operation_count_after = default.record_find_by_page(QueryPage { page: 1, size: 10 }, Some(RecordSearchArg{ id_range: None, created_at_nanos_range: None, topic: Some(vec!["Record".to_string()]), content: None, caller: None })).unwrap().total;
+    assert_eq!(record_operation_count_after, record_operation_count_before);
 
     // 🚩 4 schedule
     assert_eq!(alice.schedule_find().unwrap_err().reject_message, "Permission 'ScheduleFind' is required".to_string());

@@ -92,9 +92,9 @@ impl Recordable<Record, RecordTopic, RecordSearch> for State {
         self.get_mut().record_update(record_id, result)
     }
 
-    // 迁移
-    fn record_migrate(&mut self, max: u32) -> MigratedRecords<Record> {
-        self.get_mut().record_migrate(max)
+    // 删除
+    fn record_delete(&mut self, ids: &HashSet<RecordId>) -> u64 {
+        self.get_mut().record_delete(ids)
     }
 }
 
@@ -107,6 +107,15 @@ impl Schedulable for State {
     fn schedule_replace(&mut self, schedule: Option<DurationNanos>) {
         self.get_mut().schedule_replace(schedule)
     }
+}
+
+/// 确保当前没有正在执行的定时任务。
+///
+/// 通过尝试取得同一个防重入 guard 判断任务是否空闲；函数返回时 guard
+/// 会立即释放。调用方必须在检查后、修改状态前保持同步执行，不能插入 `await`。
+pub fn schedule_task_must_be_idle() -> Result<(), String> {
+    let _guard = try_schedule_task_guard()?;
+    Ok(())
 }
 
 /// 执行定时任务，自动任务与手动任务共享同一个防重入锁
@@ -147,5 +156,26 @@ impl StableHeap for State {
 
     fn heap_from_bytes(&mut self, bytes: &[u8]) {
         self.get_mut().heap_from_bytes(bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{schedule_task_must_be_idle, try_schedule_task_guard};
+
+    #[test]
+    fn schedule_task_idle_check_uses_the_execution_guard() {
+        assert!(schedule_task_must_be_idle().is_ok());
+
+        let guard = try_schedule_task_guard();
+        assert!(guard.is_ok());
+        if let Ok(guard) = guard {
+            assert_eq!(
+                schedule_task_must_be_idle(),
+                Err("Schedule task is already running.".to_string())
+            );
+            drop(guard);
+        }
+        assert!(schedule_task_must_be_idle().is_ok());
     }
 }

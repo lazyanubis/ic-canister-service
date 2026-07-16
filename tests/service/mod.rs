@@ -137,13 +137,6 @@ pub struct PageData {
     pub size: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, CandidType, Deserialize)]
-pub struct MigratedRecords {
-    pub records: Vec<Record>,
-    pub next_id: u64,
-    pub retention_evicted_count: u64,
-}
-
 // * ========================== Test Module ========================== *
 
 #[derive(Clone, Copy)]
@@ -231,8 +224,8 @@ impl Service<'_> {
     pub fn record_find_by_page(&self, arg0: QueryPage, arg1: Option<RecordSearchArg>) -> Result<PageData> {
         self.query_call("record_find_by_page", encode_args((&arg0, &arg1)).unwrap())
     }
-    pub fn record_migrate(&self, arg0: u32) -> Result<MigratedRecords> {
-        self.update_call("record_migrate", encode_one(arg0).unwrap())
+    pub fn record_delete(&self, arg0: Vec<u64>) -> Result<u64> {
+        self.update_call("record_delete", encode_one(arg0).unwrap())
     }
     pub fn record_topics(&self) -> Result<Vec<String>> {
         self.query_call("record_topics", Encode!(&()).unwrap())

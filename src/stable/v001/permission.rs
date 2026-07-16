@@ -12,7 +12,7 @@ use super::types::{InnerState, ParsePermission};
 // 通用权限
 pub use super::super::v000::types::{
     ACTION_PAUSE_QUERY, ACTION_PAUSE_REPLACE, ACTION_PERMISSION_FIND, ACTION_PERMISSION_QUERY,
-    ACTION_PERMISSION_UPDATE, ACTION_RECORD_FIND, ACTION_RECORD_MIGRATE, ACTION_SCHEDULE_FIND, ACTION_SCHEDULE_REPLACE,
+    ACTION_PERMISSION_UPDATE, ACTION_RECORD_DELETE, ACTION_RECORD_FIND, ACTION_SCHEDULE_FIND, ACTION_SCHEDULE_REPLACE,
     ACTION_SCHEDULE_TRIGGER,
 };
 
@@ -30,7 +30,7 @@ pub const ACTIONS: &[&str] = &[
     ACTION_PERMISSION_FIND,
     ACTION_PERMISSION_UPDATE,
     ACTION_RECORD_FIND,
-    ACTION_RECORD_MIGRATE,
+    ACTION_RECORD_DELETE,
     ACTION_SCHEDULE_FIND,
     ACTION_SCHEDULE_REPLACE,
     ACTION_SCHEDULE_TRIGGER,
@@ -60,7 +60,7 @@ impl ParsePermission for InnerState {
             ACTION_PERMISSION_FIND => Permission::by_permit(name),
             ACTION_PERMISSION_UPDATE => Permission::by_permit(name),
             ACTION_RECORD_FIND => Permission::by_permit(name),
-            ACTION_RECORD_MIGRATE => Permission::by_permit(name),
+            ACTION_RECORD_DELETE => Permission::by_permit(name),
             ACTION_SCHEDULE_FIND => Permission::by_permit(name),
             ACTION_SCHEDULE_REPLACE => Permission::by_permit(name),
             ACTION_SCHEDULE_TRIGGER => Permission::by_permit(name),
@@ -77,7 +77,7 @@ impl ParsePermission for InnerState {
 #[allow(unused)]
 pub use super::super::v000::types::{
     has_pause_query, has_pause_replace, has_permission_find, has_permission_query, has_permission_update,
-    has_record_find, has_record_migrate, has_schedule_find, has_schedule_replace, has_schedule_trigger,
+    has_record_delete, has_record_find, has_schedule_find, has_schedule_replace, has_schedule_trigger,
 };
 
 // 业务权限

@@ -132,9 +132,9 @@ impl Recordable<Record, RecordTopic, RecordSearch> for InnerState {
     fn record_update(&mut self, record_id: RecordId, result: String) {
         self.canister_kit.records.record_update(record_id, result)
     }
-    // 迁移
-    fn record_migrate(&mut self, max: u32) -> MigratedRecords<Record> {
-        self.canister_kit.records.record_migrate(max)
+    // 删除
+    fn record_delete(&mut self, ids: &HashSet<RecordId>) -> u64 {
+        self.canister_kit.records.record_delete(ids)
     }
 }
 

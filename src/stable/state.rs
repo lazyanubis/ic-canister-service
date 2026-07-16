@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use ic_canister_kit::identity::caller;
 use ic_canister_kit::types::*;
 
-use super::{InitArgs, RecordTopics, ScheduleTask, UpgradeArgs};
+use super::{InitArgs, RecordTopics, ScheduleTask, UpgradeArgs, schedule_task_must_be_idle, validate_schedule};
 use super::{State, State::*};
 
 // 默认值
@@ -52,6 +52,11 @@ fn post_upgrade(args: Option<UpgradeArgs>) {
         *state.borrow_mut() = last_state;
 
         state.borrow_mut().upgrade(args); // ! 恢复后要进行升级到最新版本
+
+        // 无论本次是否传入升级参数，都要校验恢复出的定时任务配置。
+        let schedule = state.borrow().schedule_find();
+        let schedule = ic_canister_kit::common::trap(validate_schedule(schedule));
+        state.borrow_mut().schedule_replace(schedule);
         state.borrow_mut().schedule_reload(); // * 重置定时任务
 
         let version = state.borrow().version(); // 先不可变借用取出版本号
@@ -69,6 +74,7 @@ fn pre_upgrade() {
     STATE.with(|state| {
         use ic_canister_kit::common::trap;
         trap(state.borrow().pause_must_be_paused()); // ! 必须是维护状态, 才可以升级
+        trap(schedule_task_must_be_idle()); // ! 运行中的定时任务必须先完成
         state.borrow_mut().schedule_stop(); // * 停止定时任务
 
         let record_id = state.borrow_mut().record_push(

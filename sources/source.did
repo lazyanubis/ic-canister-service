@@ -112,15 +112,6 @@ type MemoryMetrics = record {
   // Represents the memory used by custom sections defined by the canister.
   custom_sections_size : nat;
 };
-// 迁移内容
-type MigratedRecords = record {
-  // 本次迁移的记录
-  records : vec Record;
-  // 因保留上限被累计淘汰的记录数量
-  retention_evicted_count : nat64;
-  // 下一个未使用的记录 id
-  next_id : nat64;
-};
 // 分页查询结果
 type PageData = record {
   // 总个数
@@ -225,8 +216,8 @@ service : (opt InitArgs) -> {
   permission_roles_by_user : (principal) -> (opt vec text) query;
   permission_roles_query : () -> (opt vec text) query;
   permission_update : (vec PermissionUpdatedArg) -> ();
+  record_delete : (vec nat64) -> (nat64);
   record_find_by_page : (QueryPage, opt RecordSearchArg) -> (PageData) query;
-  record_migrate : (nat32) -> (MigratedRecords);
   record_topics : () -> (vec text) query;
   schedule_find : () -> (opt nat64) query;
   schedule_replace : (opt nat64) -> ();

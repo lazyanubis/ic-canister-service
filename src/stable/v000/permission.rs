@@ -16,7 +16,7 @@ pub const ACTION_PERMISSION_QUERY: &str = "PermissionQuery"; // 查询个人权�
 pub const ACTION_PERMISSION_FIND: &str = "PermissionFind"; // 查询他人权限
 pub const ACTION_PERMISSION_UPDATE: &str = "PermissionUpdate"; // 设置权限
 pub const ACTION_RECORD_FIND: &str = "RecordFind"; // 查询记录
-pub const ACTION_RECORD_MIGRATE: &str = "RecordMigrate"; // 迁移记录
+pub const ACTION_RECORD_DELETE: &str = "RecordDelete"; // 删除记录
 pub const ACTION_SCHEDULE_FIND: &str = "ScheduleFind"; // 查询定时状态
 pub const ACTION_SCHEDULE_REPLACE: &str = "ScheduleReplace"; // 设置定时频率
 pub const ACTION_SCHEDULE_TRIGGER: &str = "ScheduleTrigger"; // 触发定时任务
@@ -33,7 +33,7 @@ pub const ACTIONS: &[&str] = &[
     ACTION_PERMISSION_FIND,
     ACTION_PERMISSION_UPDATE,
     ACTION_RECORD_FIND,
-    ACTION_RECORD_MIGRATE,
+    ACTION_RECORD_DELETE,
     ACTION_SCHEDULE_FIND,
     ACTION_SCHEDULE_REPLACE,
     ACTION_SCHEDULE_TRIGGER,
@@ -61,7 +61,7 @@ impl ParsePermission for InnerState {
             ACTION_PERMISSION_FIND => Permission::by_permit(name),
             ACTION_PERMISSION_UPDATE => Permission::by_permit(name),
             ACTION_RECORD_FIND => Permission::by_permit(name),
-            ACTION_RECORD_MIGRATE => Permission::by_permit(name),
+            ACTION_RECORD_DELETE => Permission::by_permit(name),
             ACTION_SCHEDULE_FIND => Permission::by_permit(name),
             ACTION_SCHEDULE_REPLACE => Permission::by_permit(name),
             ACTION_SCHEDULE_TRIGGER => Permission::by_permit(name),
@@ -99,8 +99,8 @@ pub fn has_record_find() -> Result<(), String> {
     check_permission(ACTION_RECORD_FIND, false)
 }
 
-pub fn has_record_migrate() -> Result<(), String> {
-    check_permission(ACTION_RECORD_MIGRATE, false)
+pub fn has_record_delete() -> Result<(), String> {
+    check_permission(ACTION_RECORD_DELETE, false)
 }
 
 pub fn has_schedule_find() -> Result<(), String> {

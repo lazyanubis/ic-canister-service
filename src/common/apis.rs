@@ -65,6 +65,10 @@ fn pause_replace(reason: Option<String>) {
         return; // 未改变内容
     }
 
+    if reason.is_some() {
+        ic_canister_kit::common::trap(schedule_task_must_be_idle());
+    }
+
     let caller = caller();
     let pausing = reason.is_some();
     let arg_content = format!("{} -> {}", display_option(&old), display_option(&reason)); // * 记录参数内容
@@ -186,6 +190,9 @@ fn permission_update(args: Vec<PermissionUpdatedArg<String>>) {
 
 // ================== 记录接口 ==================
 
+/// 单次记录查询或删除的最大数量
+const MAX_RECORD_BATCH_SIZE: usize = 1000;
+
 // 查询所有主题
 #[ic_cdk::query(guard = "has_record_find")]
 fn record_topics() -> Vec<String> {
@@ -200,37 +207,27 @@ fn record_find_by_page(page: QueryPage, search: Option<RecordSearchArg>) -> Page
         .map(|s| s.into(|t| RecordTopics::from(t).map(|t| t.topic())))
         .transpose();
     let search = trap(search);
-    let result = with_state(|s| s.record_find_by_page(&page, 1000, &search).map(|p| p.into()));
+    let result = with_state(|s| {
+        s.record_find_by_page(&page, MAX_RECORD_BATCH_SIZE as u32, &search)
+            .map(|p| p.into())
+    });
     trap(result)
 }
 
-// 移动
-#[ic_cdk::update(guard = "has_record_migrate")]
-fn record_migrate(max: u32) -> MigratedRecords<Record> {
-    if max == 0 {
-        ic_cdk::trap("Record migration max must be greater than 0.");
+// 按 id 批量删除；调用方应先通过 record_find_by_page 查询并完成外部归档
+#[ic_cdk::update(guard = "has_record_delete")]
+fn record_delete(ids: Vec<u64>) -> u64 {
+    if ids.len() > MAX_RECORD_BATCH_SIZE {
+        ic_cdk::trap(format!("Record delete size must not exceed {MAX_RECORD_BATCH_SIZE}."));
     }
 
-    let caller = caller();
-    let arg_content = format!("wanna migrate {max} records"); // * 记录参数内容
-    let record_count = with_state(|s| u32::try_from(s.record_find_all().len()).unwrap_or(u32::MAX));
-    let max = max.min(record_count);
+    let ids = ids.into_iter().map(RecordId::from).collect::<HashSet<_>>();
+    if ids.is_empty() {
+        return 0;
+    }
 
-    with_mut_state(
-        |s, record_result| {
-            let result = s.record_migrate(max);
-            *record_result = Some(format!(
-                "retention evicted: {} next id: {} record size: {} ",
-                result.retention_evicted_count,
-                result.next_id,
-                result.records.len(),
-            ));
-            result
-        },
-        caller,
-        RecordTopics::Record.topic(),
-        arg_content,
-    )
+    // 删除日志本身不能再追加日志，否则外部归档永远无法清空记录。
+    with_mut_state_without_record(|s| s.record_delete(&ids))
 }
 
 // ================== 定时任务 ==================
