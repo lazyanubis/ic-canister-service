@@ -29,6 +29,7 @@ pub(super) mod immutable {
         fn business_example_query(&self) -> String {
             ic_cdk::trap("Not supported operation by this version.")
         }
+
         fn business_example_count_query(&self) -> u64 {
             ic_cdk::trap("Not supported operation by this version.")
         }
@@ -59,6 +60,7 @@ pub(super) mod immutable {
         fn business_example_query(&self) -> String {
             self.get().business_example_query()
         }
+
         fn business_example_count_query(&self) -> u64 {
             self.get().business_example_count_query()
         }
@@ -101,6 +103,7 @@ pub mod mutable {
         fn business_example_update(&mut self, test: String) {
             ic_cdk::trap("Not supported operation by this version.")
         }
+
         fn business_example_count_update(&mut self, value: u64) {
             ic_cdk::trap("Not supported operation by this version.")
         }
@@ -144,6 +147,7 @@ pub mod mutable {
         fn business_example_update(&mut self, test: String) {
             self.get_mut().business_example_update(test)
         }
+
         fn business_example_count_update(&mut self, value: u64) {
             self.get_mut().business_example_count_update(value)
         }
