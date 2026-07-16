@@ -116,10 +116,10 @@ type MemoryMetrics = record {
 type MigratedRecords = record {
   // 本次迁移的记录
   records : vec Record;
-  // 当前记录个数
+  // 因保留上限被累计淘汰的记录数量
+  retention_evicted_count : nat64;
+  // 下一个未使用的记录 id
   next_id : nat64;
-  // 一共被删除的记录个数
-  removed : nat64;
 };
 // 分页查询结果
 type PageData = record {
@@ -134,8 +134,8 @@ type PageData = record {
 };
 // 维护原因对象
 type PauseReason = record {
-  // 维护时间
-  timestamp_nanos : int;
+  // 进入维护状态的时间
+  paused_at : int;
   // 维护原因
   message : text;
 };
@@ -181,29 +181,29 @@ type QueryStats = record {
 type Record = record {
   // 记录 id
   id : nat64;
+  // 完成时间与执行结果
+  completion : opt record { int; text };
   // 创建时间戳 纳秒
   created : int;
   // 记录主题
   topic : nat8;
   // 记录内容
   content : text;
-  // 完成时间 完成结果
-  done : opt record { int; text };
   // 调用人
   caller : principal;
 };
 // 记录检索
 type RecordSearchArg = record {
-  // id 过滤
-  id : opt record { opt nat64; opt nat64 };
-  // 创建时间过滤
-  created : opt record { opt nat64; opt nat64 };
   // 主题过滤
   topic : opt vec text;
   // 内容过滤
   content : opt text;
+  // id 范围过滤，依次为包含下界和包含上界
+  id_range : opt record { opt nat64; opt nat64 };
   // 调用人过滤
   caller : opt vec principal;
+  // 创建时间纳秒范围过滤，依次为包含下界和包含上界
+  created_at_nanos_range : opt record { opt nat64; opt nat64 };
 };
 service : (opt InitArgs) -> {
   business_example_count_query : () -> (nat64) query;

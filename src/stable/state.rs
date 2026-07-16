@@ -120,16 +120,16 @@ where
     STATE.with(|state| {
         let mut state = state.borrow_mut(); // 取得可变对象
         let record_id = state.record_push(caller, topic, content);
-        let mut done = None;
-        let result = callback(&mut state, &mut done);
+        let mut record_result = None;
+        let output = callback(&mut state, &mut record_result);
         state.record_update(
             record_id,
-            done.unwrap_or_else(|| match serde_json::to_string(&result) {
+            record_result.unwrap_or_else(|| match serde_json::to_string(&output) {
                 Ok(s) => s,
                 Err(e) => format!("Serialize failed: {e}"),
             }),
         );
-        result
+        output
     })
 }
 
@@ -144,17 +144,9 @@ pub fn with_record_push(topic: RecordTopic, content: String) -> RecordId {
 }
 /// 更新记录
 #[allow(unused)]
-pub fn with_record_update(record_id: RecordId, done: String) {
+pub fn with_record_update(record_id: RecordId, result: String) {
     STATE.with(|state| {
         let mut state = state.borrow_mut(); // 取得可变对象
-        state.record_update(record_id, done)
-    })
-}
-/// 更新记录
-#[allow(unused)]
-pub fn with_record_update_done(record_id: RecordId) {
-    STATE.with(|state| {
-        let mut state = state.borrow_mut(); // 取得可变对象
-        state.record_update(record_id, String::new())
+        state.record_update(record_id, result)
     })
 }

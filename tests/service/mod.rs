@@ -86,7 +86,7 @@ pub struct CanisterStatusResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Deserialize)]
 pub struct PauseReason {
-    pub timestamp_nanos: candid::Int,
+    pub paused_at: candid::Int,
     pub message: String,
 }
 
@@ -112,8 +112,8 @@ pub struct QueryPage {
 
 #[derive(Debug, Clone, PartialEq, Eq, CandidType, Deserialize)]
 pub struct RecordSearchArg {
-    pub id: Option<(Option<u64>, Option<u64>)>,
-    pub created: Option<(Option<u64>, Option<u64>)>,
+    pub id_range: Option<(Option<u64>, Option<u64>)>,
+    pub created_at_nanos_range: Option<(Option<u64>, Option<u64>)>,
     pub topic: Option<Vec<String>>,
     pub content: Option<String>,
     pub caller: Option<Vec<Principal>>,
@@ -125,7 +125,7 @@ pub struct Record {
     pub created: candid::Int,
     pub topic: u8,
     pub content: String,
-    pub done: Option<(candid::Int, String)>,
+    pub completion: Option<(candid::Int, String)>,
     pub caller: Principal,
 }
 
@@ -141,7 +141,7 @@ pub struct PageData {
 pub struct MigratedRecords {
     pub records: Vec<Record>,
     pub next_id: u64,
-    pub removed: u64,
+    pub retention_evicted_count: u64,
 }
 
 // * ========================== Test Module ========================== *

@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use ic_canister_kit::functions::schedule::try_schedule_task_guard;
+pub use ic_canister_kit::functions::schedule::validate_schedule;
 use ic_canister_kit::types::*;
 
 use super::{ParsePermission, ParsePermissionError, business::immutable::GetImmutable, business::mutable::GetMutable};
@@ -86,8 +88,8 @@ impl Recordable<Record, RecordTopic, RecordSearch> for State {
     fn record_push(&mut self, caller: CallerId, topic: RecordTopic, content: String) -> RecordId {
         self.get_mut().record_push(caller, topic, content)
     }
-    fn record_update(&mut self, record_id: RecordId, done: String) {
-        self.get_mut().record_update(record_id, done)
+    fn record_update(&mut self, record_id: RecordId, result: String) {
+        self.get_mut().record_update(record_id, result)
     }
 
     // 迁移
@@ -107,13 +109,23 @@ impl Schedulable for State {
     }
 }
 
+/// 执行定时任务，自动任务与手动任务共享同一个防重入锁
+pub async fn run_schedule_task(record_by: Option<CallerId>) -> Result<(), String> {
+    with_state(|s| s.pause_must_be_running())?;
+    let _guard = try_schedule_task_guard()?;
+    schedule_task(record_by).await;
+    Ok(())
+}
+
 #[allow(unused)]
 async fn static_schedule_task() {
     if with_state(|s| s.pause_is_paused()) {
         return; // 维护中不允许执行任务
     }
 
-    ic_cdk::futures::spawn(async move { schedule_task(None).await });
+    if let Err(error) = run_schedule_task(None).await {
+        ic_cdk::println!("Skip schedule task: {error}");
+    }
 }
 
 pub trait ScheduleTask: Schedulable {

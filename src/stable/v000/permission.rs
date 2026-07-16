@@ -104,11 +104,11 @@ pub fn has_record_migrate() -> Result<(), String> {
 }
 
 pub fn has_schedule_find() -> Result<(), String> {
-    check_permission(ACTION_SCHEDULE_FIND, true)
+    check_permission(ACTION_SCHEDULE_FIND, false)
 }
 
 pub fn has_schedule_replace() -> Result<(), String> {
-    check_permission(ACTION_SCHEDULE_REPLACE, true)
+    check_permission(ACTION_SCHEDULE_REPLACE, false)
 }
 
 pub fn has_schedule_trigger() -> Result<(), String> {

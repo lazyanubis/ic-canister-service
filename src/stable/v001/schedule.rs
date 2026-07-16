@@ -21,7 +21,7 @@ pub async fn schedule_task(record_by: Option<CallerId>) {
     inner_task(record_by).await;
 
     // * 记录
-    with_record_update_done(record_id);
+    with_record_update(record_id, String::new());
 }
 
 async fn inner_task(caller: Option<CallerId>) {

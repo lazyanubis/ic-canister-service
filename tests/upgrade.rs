@@ -1,6 +1,6 @@
 //! https://github.com/dfinity/pocketic
 use candid::encode_one;
-use pocket_ic::{ErrorCode, PocketIcBuilder, RejectCode, RejectResponse};
+use pocket_ic::{ErrorCode, PocketIcBuilder, RejectCode};
 
 mod util;
 
@@ -32,12 +32,13 @@ fn test_upgrade() {
     for _ in 0..6 { pic.tick(); } // 🕰︎
     let arg: Vec<u8> = encode_one(None::<()>).unwrap();
     assert_eq!(arg, vec![68, 73, 68, 76, 1, 110, 127, 1, 0, 0]); // 4449444c016e7f010000
-    assert_eq!(pic.upgrade_canister(canister_id, WASM_MODULE_NEXT.to_vec(), arg, Some(default_identity)).unwrap_err(), RejectResponse {
-        reject_code: RejectCode::CanisterError,
-        reject_message: "Error from Canister lxzze-o7777-77777-aaaaa-cai: Canister called `ic0.trap` with message: 'Canister is running. Not paused.'.\nConsider gracefully handling failures from this canister or altering the canister to handle exceptions. See documentation: https://internetcomputer.org/docs/current/references/execution-errors#trapped-explicitly".to_string(),
-        error_code: ErrorCode::CanisterCalledTrap,
-        certified: true
-    });
+    let reject = pic
+        .upgrade_canister(canister_id, WASM_MODULE_NEXT.to_vec(), arg, Some(default_identity))
+        .unwrap_err();
+    assert_eq!(reject.reject_code, RejectCode::CanisterError);
+    assert!(reject.reject_message.contains("Canister is running. Not paused."));
+    assert_eq!(reject.error_code, ErrorCode::CanisterCalledTrap);
+    assert!(reject.certified);
 
     // ! next
     for _ in 0..6 { pic.tick(); } // 🕰︎
